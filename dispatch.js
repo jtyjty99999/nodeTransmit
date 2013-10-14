@@ -20,7 +20,7 @@ cluster.fork();
 cluster.fork();
 
 cluster.on('disconnect', function (worker) {
-  var w = cluster.fork();
+  var w = cluster.fork();//断掉时重新fork一个核
   console.error('[%s] [master:%s] wroker:%s disconnect! new worker:%s fork', 
     new Date(), process.pid, worker.process.pid, w.process.pid);
 });

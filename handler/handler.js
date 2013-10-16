@@ -4,6 +4,7 @@
 
 var geo = require('../lib/geo'),
 url = require('url'),
+http = require('http'),
 querystring = require('querystring'),
 error = require('../error/errorHandler'),
 mysql = require('mysql'),
@@ -11,19 +12,39 @@ config = require('../config').config,
 redis = require("redis"),
 request = require("request"),
 fs = require("fs"),
-mongodb = require('mongodb');
+path = require("path"),
+mongodb = require('mongodb'),
+tool = require('../lib/tool');
+mime = require('mime'),
+csv = require('csv');
 
 //处理莫名其妙的请求
 exports.notFound = function (req, res, next) {
    error.pageNotFound(req,res)
 };
 
+function getQuery(req){
+return querystring.parse(url.parse(req.url).query);
+}
+
+exports.pointInPolygon = function(req,res,next){
+
+
+var query =getQuery(req);
+var area = [{x:37.628134,y:-77.458334},{x:37.629867,y:-77.449021},{x:37.62324,y:-77.445416},{x:37.622424,y:-77.457819}]
+
+query['result'] = geo.pointsInPolygon(eval(query.area),Number(query.lat),Number(query.lon))
+
+res.end(JSON.stringify(query))
+
+}
+
 
 //获取坐标相对距离
 //http://stackoverflow.com/questions/7985188/calculate-the-direction-of-an-object-with-geographical-coordinates-latitude-lo
 exports.getDistance = function (req, res, next) {
 
-	var query = querystring.parse(url.parse(req.url).query);
+	var query =getQuery(req)
 	
 	if (isNaN(Number(query.lat1))) {//解析后是String,用Number转换一下,之后用isNaN判断,因为NaN跟NaN不一样
 		error.dataInvalid(req, res)
@@ -65,9 +86,27 @@ exports.getNextPoint = function(req, res, next){
 	
 }
 
+exports.transform = function(req, res, next){
+	var query =getQuery(req)
+	
+	if (isNaN(Number(query.lat))) {//解析后是String,用Number转换一下,之后用isNaN判断,因为NaN跟NaN不一样
+		error.dataInvalid(req, res)
+	}
+
+	
+	var trans = geo.transform(query.lat,query.lon);    
+	
+	var result = query;
+	
+	result['trans'] = trans;
+
+	res.end(JSON.stringify(result));
+	
+}
+
 
 exports.getIntersection= function(req, res, next){
-	var query = querystring.parse(url.parse(req.url).query);
+	var query =getQuery(req)
 	
 	if (isNaN(Number(query.lat1))) {//解析后是String,用Number转换一下,之后用isNaN判断,因为NaN跟NaN不一样
 		error.dataInvalid(req, res)
@@ -90,7 +129,7 @@ exports.getIntersection= function(req, res, next){
 //获取坐标相对角度
 exports.getDegrees = function (req, res, next) {
 
-	var query = querystring.parse(url.parse(req.url).query);
+	var query =getQuery(req)
 	
 	if (isNaN(Number(query.lat1))) {//解析后是String,用Number转换一下,之后用isNaN判断,因为NaN跟NaN不一样
 		error.dataInvalid(req, res)
@@ -108,9 +147,9 @@ exports.getDegrees = function (req, res, next) {
 
 
 //利用near查询poi
-exports.getDegrees = function (req, res, next) {
+exports.near = function (req, res, next) {
 
-	var query = querystring.parse(url.parse(req.url).query);
+	var query =getQuery(req)
 	
 	if (isNaN(Number(query.lat1))) {//解析后是String,用Number转换一下,之后用isNaN判断,因为NaN跟NaN不一样
 		error.dataInvalid(req, res)
@@ -155,17 +194,18 @@ exports.testWriteRequest = function(req,res,next){
 //利用readfile,文件数据一次性全部读入内存，
 //优点就是接下来都是在内存的操作，速度会很快。
 //但缺点也很明显，就是当文件非常大时，会造成内存溢出。  
-var foo;
-foo.bar();
-request('http://www.google.cm/images/srpr/logo4w.png').pipe(fs.createWriteStream('doodle.png'))
+var query =getQuery(req);
+//var foo;
+//foo.bar();
+request(query.url).pipe(fs.createWriteStream(query.toFile))
 res.end('over')
 
 }
 
 //测试读取本地服务器的图片文件
 exports.testReadRequest = function(req,res,next){
-
- var readstream = fs.createReadStream('doodle.png');
+var query =getQuery(req);
+ var readstream = fs.createReadStream(query.file);
 	readstream.on('error', function(chunk) {
         res.end('file error');
     });
@@ -180,29 +220,31 @@ exports.testReadRequest = function(req,res,next){
 
 //测试redis的写
 exports.testRedisWrite = function (req, res, next) {
+var query =getQuery(req);
 
 	var client = redis.createClient(config.redis_public_port, config.redis_public_host);
 	client.on("error", function (err) {
 		console.log("Error " + err);
 	});
 
-	client.hset('website', 'google', "www.g.cn", function (err, reply) {
+	client.hset(query.set, query.key, query.value, function (err, reply) {
 		if (err)
 			throw err;
-		console.log(reply);
-
+		res.end('ok');
 	});
 	
 }
 //测试redis的读
 exports.testRedisRead = function (req, res, next) {
 
+var query =getQuery(req);
+
 	var client = redis.createClient(config.redis_public_port, config.redis_public_host);
 	client.on("error", function (err) {
 		console.log("Error " + err);
 	});
 
-		client.hget('website', 'google', function (err, reply) {
+		client.hget(query.set, query.key, function (err, reply) {
 
 			if (err)
 				throw err;
@@ -255,10 +297,6 @@ connection.end();
 
 
 exports.initData = function(req,res,next){
-
-var fs = require('fs');
-var csv = require('csv');
-
 var server = new mongodb.Server(config.mongoServer, config.mongoPort, {auto_reconnect: true});
 var db = new mongodb.Db(config.mongoDbname, server, {safe: true});
 
@@ -428,3 +466,81 @@ db.open(function (err, db) {
 
 
 }
+
+//测试高德的地址匹配接口
+
+exports.addressToPoints = function(req,res,next){
+
+	var query = querystring.parse(url.parse(req.url).query);
+	
+
+var options = {
+    host: 'search1.mapabc.com',
+    port: 80,
+    path: '/sisserver?config=GOC&address='+tool.chinese2Gb2312(query.address)+'&a_k=ebfae93ca717a7dc45f6f4962c6465993808dbdadd8b280f412c4e22db13145e647323bd421ac59c'
+};
+
+http.get(options, function(response) {
+    console.log("Got response: " + response.statusCode, response.headers);
+    var buffers = [], size = 0;
+    response.on('data', function(buffer) {
+        buffers.push(buffer);
+        size += buffer.length;
+    });
+    response.on('end', function() {
+        var buffer = new Buffer(size), pos = 0;
+        for(var i = 0, l = buffers.length; i < l; i++) {
+            buffers[i].copy(buffer, pos);
+            pos += buffers[i].length;
+        }
+	   console.log(buffer.toString())
+	    res.writeHead(200, {'Content-Type': 'text/xml;charset=GBK'});
+		res.write(buffer.toString());
+		res.end();
+    });
+}).on('error', function(e) {
+    console.log("Got error: " + e.message);
+});
+	
+}
+
+
+exports.download = function(req,res){
+    
+	var query = querystring.parse(url.parse(req.url).query);
+	var downloadPath = query.download;
+	console.log('downloadPath='+downloadPath);
+  path.exists(downloadPath, function(exists) {
+        console.log("exists: ", exists);
+        if (exists) {
+
+		var filename = path.basename(downloadPath);
+		var mimetype = mime.lookup(downloadPath); //匹配文件格式
+
+		res.setHeader('Content-disposition', 'attachment; filename=' + filename);
+		res.setHeader('Content-type', mimetype);
+
+		var filestream = fs.createReadStream(downloadPath);
+		filestream.on('data', function (chunk) {
+			res.write(chunk);
+		});
+		filestream.on('end', function () {
+			res.end();
+
+		});
+		
+        }
+    });
+    /*
+  
+              var fileStream = fs.createReadStream(downloadPath);
+            res.writeHead(200, {"Content-Type":"application/octet-stream"});
+            fileStream.pipe(res);
+            console.log('fileStream pipe');
+            fileStream.on("end", function() {
+                res.end();
+            })
+  */
+};
+
+

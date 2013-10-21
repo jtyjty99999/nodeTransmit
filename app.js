@@ -12,8 +12,9 @@ var app = connect(routeMap)
 	.use(connect.static('public'))
 	.use(function (req, res) {
 		res.end('hello world\n');
-	})
-	.listen(config.port);
+	}).listen(config.port);
+	
+	console.log(__dirname)
 	
 graceful({
   server: app,

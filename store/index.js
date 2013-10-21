@@ -1,5 +1,5 @@
 require( './mongoConf' );
 
 module.exports = {
-    poi: require( './poiHandler' )
+    poi: require( './poiControl.js' )
 };

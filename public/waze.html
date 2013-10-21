@@ -10,6 +10,7 @@
 	body{height:100%;margin:0;padding:0;font-size:15px;}
 </style>
 <script language="javascript" src="http://app.mapabc.com/apis?t=javascriptmap&v=3&key=b0a7db0b3a30f944a21c3682064dc70ef5b738b062f6479a5eca39725798b1ee300bd8d5de3a4ae3"></script>
+<script src="http://code.jquery.com/jquery-1.10.2.min.js"></script>
 <script type="text/javascript">
 var mapObj;
 function mapInit(){
@@ -111,6 +112,7 @@ function moveAlong(){
 		mapObj.bind(marker,"moving",function(e){
 			var lnglat = marker.getPosition();
 			console.log(lnglat)
+			getRoundPoi(lnglat.lat,lnglat.lng,ckeckAndShowPoi)
 			var bounds = mapObj.getBounds();
 			if(lnglat.lng <= bounds.southwest.lng || lnglat.lng>=bounds.northeast.lng || lnglat.lat<=bounds.southwest.lat || lnglat.lat>=bounds.northeast.lat){
 				mapObj.panTo(lnglat);	
@@ -120,6 +122,78 @@ function moveAlong(){
 		alert("请添加运行轨迹！");
 	}
 }
+
+var showedPoi = [];
+
+
+
+function ckeckAndShowPoi(pois) {
+	
+	console.log(pois)
+
+	var l = pois.length,
+	i = 0;
+
+	for (; i < l; i++) {
+		if (!showedPoi[pois[i]['id']]) {
+		addMarker(pois[i]['location'][1],pois[i]['location'][0]);
+		showedPoi[pois[i]['id']]=true;
+		}
+	}
+
+}
+
+
+function addMarker(lat,lon){ 
+  
+  console.log(lat,lon)
+    //构造点对象 
+  
+    var marker = new MMap.Marker({                    
+  
+       id:"marker"+lat, //marker id                       
+  
+       position:new MMap.LngLat(lon,lat), //位置  
+  
+       offset:new MMap.Pixel(-11.5,-32), //基点为图片左上角，设置相对基点的图片位置偏移量，向左向下为负 
+  
+       icon:"http://code.mapabc.com/images/lan_1.png",//图标，直接传递地址，还可以为MMap.Icon 对象 
+  
+       draggable:false, //不可拖动  
+  
+       cursor:"../MapControl/openhand.cur"//鼠标悬停时显示的光标样式 
+  
+    });  
+    mapObj.addOverlays(marker);//添加点覆盖物 
+} 
+
+
+
+
+
+
+
+
+
+
+function getRoundPoi(lat, lon, callback) {
+
+	$.ajax({
+		url : 'findPoi?distance=0.5&lat=' + lat + '&lon=' + lon,
+		context : document.body,
+		dataType:'json'
+	}).done(function (msg) {
+
+
+		callback && callback.call(null,msg)
+
+	});
+
+}
+
+
+
+
 //暂停运动
 function pauseMove(){
 	if(arrOverlays.length!==0){

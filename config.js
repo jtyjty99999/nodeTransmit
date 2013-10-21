@@ -14,5 +14,6 @@ exports.config = {
   mongoDbname: 'test',
   port: 3000,
   redis_public_port:'6379',
-  redis_public_host:'192.168.1.3'
+  redis_public_host:'192.168.1.3',
+  callback:'queryCallback' //jsonp
 };

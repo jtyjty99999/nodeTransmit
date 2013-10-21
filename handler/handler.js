@@ -6,7 +6,7 @@ var geo = require('../lib/geo'),
 url = require('url'),
 http = require('http'),
 querystring = require('querystring'),
-error = require('../error/errorHandler'),
+errorHandler = require('../error/errorHandler'),
 mysql = require('mysql'),
 config = require('../config').config,
 redis = require("redis"),
@@ -20,7 +20,7 @@ csv = require('csv');
 
 //处理莫名其妙的请求
 exports.notFound = function (req, res, next) {
-   error.pageNotFound(req,res)
+   errorHandler.pageNotFound(req,res)
 };
 
 function getQuery(req){
@@ -47,7 +47,7 @@ exports.getDistance = function (req, res, next) {
 	var query =getQuery(req)
 	
 	if (isNaN(Number(query.lat1))) {//解析后是String,用Number转换一下,之后用isNaN判断,因为NaN跟NaN不一样
-		error.dataInvalid(req, res)
+		errorHandler.dataInvalid(req, res)
 	}
 	//var distance = geo.getDistance(query.lat1, query.lon1, query.lat2, query.lon2);
 
@@ -71,7 +71,7 @@ exports.getNextPoint = function(req, res, next){
 	var query = querystring.parse(url.parse(req.url).query);
 	
 	if (isNaN(Number(query.lat))) {//解析后是String,用Number转换一下,之后用isNaN判断,因为NaN跟NaN不一样
-		error.dataInvalid(req, res)
+		errorHandler.dataInvalid(req, res)
 	}
 
 	var points1 = new geo.LatLon(query.lat,query.lon);
@@ -90,7 +90,7 @@ exports.transform = function(req, res, next){
 	var query =getQuery(req)
 	
 	if (isNaN(Number(query.lat))) {//解析后是String,用Number转换一下,之后用isNaN判断,因为NaN跟NaN不一样
-		error.dataInvalid(req, res)
+		errorHandler.dataInvalid(req, res)
 	}
 
 	
@@ -109,7 +109,7 @@ exports.getIntersection= function(req, res, next){
 	var query =getQuery(req)
 	
 	if (isNaN(Number(query.lat1))) {//解析后是String,用Number转换一下,之后用isNaN判断,因为NaN跟NaN不一样
-		error.dataInvalid(req, res)
+		errorHandler.dataInvalid(req, res)
 	}
 
 	var points1 = new geo.LatLon(query.lat1,query.lon1);
@@ -132,7 +132,7 @@ exports.getDegrees = function (req, res, next) {
 	var query =getQuery(req)
 	
 	if (isNaN(Number(query.lat1))) {//解析后是String,用Number转换一下,之后用isNaN判断,因为NaN跟NaN不一样
-		error.dataInvalid(req, res)
+		errorHandler.dataInvalid(req, res)
 	}
 	var toward = geo.gps2d(query.lat1, query.lon1, query.lat2, query.lon2);
 
@@ -152,7 +152,7 @@ exports.near = function (req, res, next) {
 	var query =getQuery(req)
 	
 	if (isNaN(Number(query.lat1))) {//解析后是String,用Number转换一下,之后用isNaN判断,因为NaN跟NaN不一样
-		error.dataInvalid(req, res)
+		errorHandler.dataInvalid(req, res)
 	}
 	
 db.open(function (err, db) {
@@ -310,13 +310,13 @@ db.open(function (err, db) {
         console.log('connect');
 		
 		
-		        db.collection('mycoll', {
+		        db.collection('poiDb', {
 		        	safe : true
 		        }, function (err, collection) {
 
 				
 				csv()
-				.from.stream(fs.createReadStream(__dirname + '/bigData.csv'))
+				.from.stream(fs.createReadStream(__dirname + '/poi.csv'))
 				.to.path(__dirname + '/sample.out')
 				.transform(function (row) {
 					row.unshift(row.pop());
@@ -326,9 +326,8 @@ db.open(function (err, db) {
 					//console.log('#time' + row[6] + 'lat' + row[9] + 'lon' + row[8] + 'userid' + row[2]);
 
 					collection.insert({
-						userid : row[2],
-						time : Number(row[6]),
-						data : [row[9],row[8]]
+						count:0,
+						location : [Number(row[0]),Number(row[1])]
 					}, {
 						safe : true
 					}, function (err, result) {});
@@ -542,5 +541,91 @@ exports.download = function(req,res){
             })
   */
 };
+
+
+
+
+
+
+
+
+
+
+
+//初始化poi
+var store = require('../store/');
+var poi = new store.poi();
+
+
+exports.initPoi = function (req, res, next) {
+
+  poi.on( '_error', function (msg,error){
+		   errorHandler.sendErrorMsg(req,res,msg);
+        });
+
+
+var i = 0;
+	csv()
+	.from.stream(fs.createReadStream(__dirname + '/poi.csv'))
+	.to.path(__dirname + '/sample.out')
+	.transform(function (row) {
+		row.unshift(row.pop());
+		return row;
+	})
+	.on('record', function (row, index) {
+		poi.add({
+			location : [Number(row[1]), Number(row[0])],  //long,lat
+			id : ++i,
+			count : 0,
+		}, function (a) {
+			
+		})
+		
+
+	})
+	.on('close', function (count) {
+		console.log('Number of lines: ' + count);
+		res.end('poi初始化完毕')
+	})
+	.on('error', function (error) {
+		console.log(error.message);
+	});
+
+}
+
+exports.findPoi=function(req,res,next){
+
+poi.on('_error', function (msg, error) {
+	/*
+	API.send( req, res, {
+	result: false,
+	type: 'searchItem',
+	error: msg,
+	data: error
+	});
+	 */
+	console.log('wrong' + msg)
+});
+
+var query = querystring.parse(url.parse(req.url).query);
+
+poi.query({
+	maxDistance:query.distance,
+	location:[Number(query.lon),Number(query.lat)]
+}, function (poi) {
+
+		for (var i = 0, l = poi.length; i < l; i++) {
+
+			var points1 = new geo.LatLon(39.91223543, 116.35654039);
+			var points2 = new geo.LatLon(poi[i].location[1], poi[i].location[0]);
+			var dist = points1.distanceTo(points2);
+				console.log(dist)
+			poi[i].distance = dist
+		}
+
+	res.end(JSON.stringify(poi))
+})
+
+}
 
 

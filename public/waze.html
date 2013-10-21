@@ -1,0 +1,193 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<title>轨迹运动</title>
+<style type="text/css">
+	html{height:100%}
+	body{height:100%;margin:0;padding:0;font-size:15px;}
+</style>
+<script language="javascript" src="http://app.mapabc.com/apis?t=javascriptmap&v=3&key=b0a7db0b3a30f944a21c3682064dc70ef5b738b062f6479a5eca39725798b1ee300bd8d5de3a4ae3"></script>
+<script type="text/javascript">
+var mapObj;
+function mapInit(){
+	mapObj = new MMap.Map("iCenter");
+	  mapObj.bind(mapObj,"click",function(e){ 
+  
+  console.log(e.lnglat)
+    document.getElementById("mapX").value=e.lnglat.lng; 
+  
+    document.getElementById("mapY").value=e.lnglat.lat;  
+  
+    }); 
+}
+//添加运行轨迹
+var polyline,arrSE;
+var path = new Array();
+var arrOverlays = new Array();
+function addRoute(){
+	var route = new MMap.RouteSearch();//构造驾车导航实例
+	arrSE = new Array();//设置起止点坐标
+		arrSE.push(new MMap.LngLat(116.39176319,39.9075511));
+		arrSE.push(new MMap.LngLat(116.30518149,39.98240609));
+	route.getNaviPath(arrSE,function(data){//驾车导航
+		if(data.status=='E0'){
+			//定义轨迹
+			var s='',coors='';
+			for(var i=0,l=data.count;i<l;i++){
+				coors+=data.list[i].coor+';'
+			}
+			path = dataEdit(coors);
+			path.unshift(new MMap.LngLat(116.39176319,39.9075511));
+			path.push(new MMap.LngLat(116.30518149,39.98240609));
+			polyline = new MMap.Polyline({
+				id:"polyline",
+				path:path,
+				strokeColor:"#3366CC", 
+	 			strokeOpacity:0.8,
+	 			strokeWeight:6 
+			});
+			//定义起止点
+			var a=arrSE;
+			var start=a[0],end=a[a.length-1];
+			var markerStart = new MMap.Marker({
+				id:'start',
+				icon:'http://code.mapabc.com/images/qd.png',
+				offset:{x:-8,y:-9},
+				position:arrSE[0]
+			});
+			var markerEnd = new MMap.Marker({
+				id:'end',
+				icon:'http://code.mapabc.com/images/zd.png',
+				offset:{x:-8,y:-9},
+				position:arrSE[arrSE.length-1]
+			});
+			//在地图上添加轨迹和起止点
+			arrOverlays.push(polyline);
+			arrOverlays.push(markerStart);
+			arrOverlays.push(markerEnd);
+			mapObj.addOverlays(arrOverlays);
+			mapObj.setFitView(arrOverlays);
+		}		
+	})
+}
+function dataEdit(s){//返回坐标数组
+	if(s.charAt(s.length-1)==';')s=s.substring(0,s.length-1)
+	var a=s.split(';');
+	var b=[];
+	for(var i=0,l=a.length;i<l;i++){
+		var c=a[i].split(',');
+		b.push(new MMap.LngLat(c[0],c[1]));
+	}
+	return b;
+}
+//点沿轨迹运行
+var marker;
+function moveAlong(){
+	if(arrOverlays.length!==0){//判断覆盖物是否已添加
+		marker = new MMap.Marker({
+			id:"car",
+			position:arrSE[0],
+			icon:"car.png",
+			offset:{x:-26,y:-13}
+		});
+		mapObj.addOverlays(marker);
+		//设置moveAlong参数
+		var speed=document.getElementById("speed").value; 
+		var func =document.getElementById("function").value;
+			if (func ==""){func=null;}
+		var butt=document.getElementById("btn");
+		if (butt.value="继续运动"){
+			butt.value="暂停运动";
+			butt.onclick=function(){
+            pauseMove();//还原第一次单击的时候执行的函数
+			};
+		}
+		marker.moveAlong(path,speed,func,false);//点沿轨迹运动
+		mapObj.panTo(marker.getPosition());//移动地图到轨迹初始点
+		//绑定移动事件，如果超越视野，则移动地图
+		mapObj.bind(marker,"moving",function(e){
+			var lnglat = marker.getPosition();
+			console.log(lnglat)
+			var bounds = mapObj.getBounds();
+			if(lnglat.lng <= bounds.southwest.lng || lnglat.lng>=bounds.northeast.lng || lnglat.lat<=bounds.southwest.lat || lnglat.lat>=bounds.northeast.lat){
+				mapObj.panTo(lnglat);	
+			}
+		});
+	}else{
+		alert("请添加运行轨迹！");
+	}
+}
+//暂停运动
+function pauseMove(){
+	if(arrOverlays.length!==0){
+		marker.pauseMove();//暂停运动
+		//设置按钮执行的函数
+		var butt=document.getElementById("btn");
+        butt.value="继续运动";
+        butt.onclick=function(){
+            againMove();//第二次单击的时候执行这个函数
+        };
+	}else{
+		alert("请添加运行轨迹！");
+	}	
+}
+//继续运动
+function againMove(){
+	if(arrOverlays.length!==0){
+		//设置moveAlong参数
+		var speed=document.getElementById("speed").value; 
+		var func =document.getElementById("function").value;
+			if (func ==""){func=null;}
+		marker.moveAlong(path,speed,func,false);//点沿轨迹运动
+		//设置按钮执行的函数
+		var butt=document.getElementById("btn");
+        butt.value="暂停运动";
+        butt.onclick=function(){
+            pauseMove();//还原第一次单击的时候执行的函数
+        };
+	}else{
+		alert("请添加运行轨迹！");
+	}	
+}
+//停止运动
+function stopMove(){
+	if(arrOverlays.length!==0){
+		marker.stopMove();//停止运动
+	}else{
+		alert("请添加运行轨迹！");
+	}	
+}
+function test(){
+console.log(arguments)
+}
+</script>
+</head>
+<body onload="mapInit();">
+<table width='100%'  border="0" cellpadding="0" cellspacing="2" height='100%'>
+	<tr>
+		<td  style="width:77%;height:100%;"><div id="iCenter" style="height:100%; width:100%"></div></td>
+		<td style="width:22%;border-left:1px solid #666;" valign="top" >
+			<div style="padding:5px 0px 0px 5px;font-size:12px;height:500px">
+				<b>轨迹运动：</b><br/><br/>
+				1.添加运行轨迹：<input type="button" onClick="javascript:addRoute();" value="点我"/><br/>
+				2.设置轨迹运行参数：<br/>
+				&nbsp;&nbsp;移动速度：<input type="text" name="speed" id="speed" value="200"/><br/>
+				&nbsp;&nbsp;动画处理函数：<input type="text" name="function" id="function" value=""/><br/>
+				3.运行：<br/>
+				<input type="button" onClick="javascript:moveAlong();" value="开始运动"/>
+				<input type="button" id="btn" value="暂停运动" onClick="javascript:pauseMove();" value="暂停运动"/>
+				<input type="button" onClick="javascript:stopMove();" value="停止运动"/>
+				
+				 X：<input type="text" name="mapX" id="mapX" value=""/><br/> 
+  
+                Y：<input type="text" name="mapY" id="mapY" value=""/> 
+				
+			</div>
+		</td>
+	</tr>
+</table>
+</body>
+</html>

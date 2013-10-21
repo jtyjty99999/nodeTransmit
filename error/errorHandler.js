@@ -15,5 +15,9 @@ module.exports= {
 	dataInvalid:function(req,res){
 		res.statusCode = 200;
 		res.end('{ERRORCODE:"ME33001",RESULT:[]}');
+	},
+	sendErrorMsg:function(req,res,msg){
+		res.statusCode = 200;
+		res.end(msg);
 	}
 };

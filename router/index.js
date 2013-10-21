@@ -13,6 +13,8 @@ module.exports = router(function (app) {
 	app.get('/pInP', handler.pointInPolygon);
 	app.get('/transform', handler.transform);
 	app.get('/download', handler.download);
+	app.get('/initPoi', handler.initPoi);
+	app.get('/findPoi', handler.findPoi);
 	app.get('/addressToPoints', handler.addressToPoints);
 	app.get('/getIntersection', handler.getIntersection);
 	app.get('/testReadMap', handler.testReadRequest);
